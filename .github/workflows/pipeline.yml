@@ -1,0 +1,32 @@
+name: Laravel CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Start Docker
+        run: docker compose -f backend/docker-compose.yml up -d --build
+
+      - name: Wait for services
+        run: sleep 40
+
+      - name: Setup Laravel
+        run: |
+          docker compose -f backend/docker-compose.yml exec -T app cp .env.example .env
+          docker compose -f backend/docker-compose.yml exec -T app php artisan key:generate
+          docker compose -f backend/docker-compose.yml exec -T app php artisan migrate --force
+          docker compose -f backend/docker-compose.yml exec -T app php artisan db:seed --force
+
+      - name: Test API (POST request)
+        run: |
+          curl -X POST http://localhost:8080/api/feedback \
+            -H "Content-Type: application/json" \
+            -d '{"message":"pipeline test"}'

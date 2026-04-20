@@ -1,0 +1,28 @@
+name: adssbs_mobile_app
+description: "Mobile App for ADSSBS Feedback System"
+publish_to: 'none' # Private package
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^1.1.0          # Needed for API requests (Gemini)
+  flutter_dotenv: ^5.0.2 # Needed to store API keys
+  cupertino_icons: ^1.0.8
+  provider: ^6.0.5  
+  shared_preferences: ^2.2.2     # Optional, if you use state management
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  
+  assets:
+    - assets/images/
