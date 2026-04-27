@@ -55,10 +55,91 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
     }
   }
 
+  final List<String> _bannedWords = [
+    // English
+    'fuck', 'shit', 'bitch', 'asshole', 'damn', 'cunt', 'dick', 'pussy',
+    'bastard', 'slut', 'whore', 'retard', 'nigga', 'nigger', 'fag', 'faggot',
+    'motherfucker', 'cock', 'tits', 'bullshit', 'piss', 'wanker', 'twat',
+    // Tagalog
+    'putangina', 'gago', 'bobo', 'tanga', 'ulol', 'pakyu', 'tangina',
+    'puta', 'kantot', 'iyot', 'hinayupak', 'lintik', 'buwisit', 'tarantado',
+    'leche', 'pesteng', 'pakshet', 'shunga', 'ungas', 'kupal', 'hinampak',
+    'demonyo', 'bwisit', 'pucha', 'puchang', 'piste', 'yawa', 'atay',
+    // Variants / leetspeak
+    'fck', 'fuk', 'sh1t', 'b1tch', 'paky0u', 'g@go', 'b0b0',
+  ];
+
+  bool _containsProfanity(String text) {
+    final lower = text.toLowerCase();
+    for (final word in _bannedWords) {
+      if (lower.contains(word)) return true;
+    }
+    return false;
+  }
+
+  bool _isGibberish(String text) {
+    final words = text.trim().split(RegExp(r'\s+'));
+    if (words.isEmpty || words.first.isEmpty) return true;
+
+    int gibberishCount = 0;
+    final totalWords = words.length;
+
+    for (final word in words) {
+      final clean = word.replaceAll(RegExp(r'[^\p{L}\p{N}]', unicode: true), '');
+      if (clean.isEmpty) continue;
+      final len = clean.length;
+
+      if (len > 7 && !RegExp(r'[aeiouAEIOU]').hasMatch(clean)) {
+        gibberishCount++;
+        continue;
+      }
+      if (len > 15 && !RegExp(r'[aeiouAEIOU]').hasMatch(clean)) {
+        gibberishCount++;
+        continue;
+      }
+      if (len >= 5) {
+        final lower = clean.toLowerCase();
+        final charCounts = <String, int>{};
+        for (var i = 0; i < lower.length; i++) {
+          charCounts.update(lower[i], (v) => v + 1, ifAbsent: () => 1);
+        }
+        final maxCount = charCounts.values.reduce((a, b) => a > b ? a : b);
+        if (maxCount / len >= 0.7) {
+          gibberishCount++;
+          continue;
+        }
+      }
+      if (len >= 10 && RegExp(r'[^aeiouAEIOU\s]{8,}').hasMatch(clean)) {
+        gibberishCount++;
+        continue;
+      }
+    }
+
+    if (totalWords > 0 && (gibberishCount / totalWords) > 0.3) return true;
+
+    final letters = text.replaceAll(RegExp(r'[^\p{L}]', unicode: true), '');
+    final ratio = letters.length / text.length;
+    if (ratio < 0.2) return true;
+
+    return false;
+  }
+
   Future<void> _submitFeedback() async {
     if (_formKey.currentState?.validate() != true ||
         _selectedOfficeId == null ||
         _selectedTypeId == null) {
+      return;
+    }
+
+    final comment = _feedbackController.text.trim();
+
+    if (_containsProfanity(comment)) {
+      _showError('Profanity detected. Please revise your feedback.');
+      return;
+    }
+
+    if (_isGibberish(comment)) {
+      _showError('Gibberish or meaningless text detected. Please provide clear feedback.');
       return;
     }
 
@@ -68,7 +149,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
       final result = await _feedbackService.submitFeedback(
         officeId: _selectedOfficeId!,
         typeId: _selectedTypeId!,
-        comment: _feedbackController.text.trim(),
+        comment: comment,
       );
 
       if (!mounted) return;
@@ -320,8 +401,8 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                                         if (words.length < 3) {
                                           return 'Feedback should be at least 3 words';
                                         }
-                                        if (words.length > 20) {
-                                          return 'Feedback should be 20 words or less';
+                                        if (words.length > 50) {
+                                          return 'Feedback should be 50 words or less';
                                         }
                                         return null;
                                       },

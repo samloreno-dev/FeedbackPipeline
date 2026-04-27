@@ -9,6 +9,8 @@ class Feedback extends Model
 {
     use HasFactory;
 
+    protected $table = 'feedback';
+
     protected $fillable = [
         'message',
         'analysis',
@@ -18,4 +20,3 @@ class Feedback extends Model
         'analysis' => 'array',
     ];
 }
-

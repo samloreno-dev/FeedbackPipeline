@@ -18,22 +18,22 @@ defaultValue: 'http://localhost:8080/api',
   Future<Map<String, dynamic>> submitFeedback({required int officeId, required int typeId, required String comment}) async {
     try {
       final response = await http.post(
-        Uri.parse('$baseUrl/feedback'), 
-        headers: {'Content-Type': 'application/json', 'Accept': 'application/json'}, 
-        body: jsonEncode({'office_id': officeId, 'type_id': typeId, 'comment': comment.trim()})
+        Uri.parse('$baseUrl/feedback'),
+        headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+        body: jsonEncode({'message': comment.trim()})
       );
-      
-      if (response.statusCode == 201) {
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
         final data = json.decode(response.body);
         return {
           'success': true,
-          'ai_available': data['ai_available'] ?? true,
-          'feedback': data['feedback']
+          'ai_available': data['analysis'] != null,
+          'feedback': data,
         };
       }
-      
+
       final error = json.decode(response.body);
-      return {'success': false, 'message': error['message'] ?? 'Failed to submit feedback: ${response.statusCode}'};
+      return {'success': false, 'message': error['message'] ?? error['error'] ?? 'Failed to submit feedback: ${response.statusCode}'};
     } catch (e) {
       print('❌ Submit feedback error: $e');
       return {'success': false, 'message': e.toString()};
@@ -44,8 +44,15 @@ defaultValue: 'http://localhost:8080/api',
     try {
       final response = await http.get(Uri.parse('$baseUrl/offices'), headers: {'Content-Type': 'application/json', 'Accept': 'application/json'});
       if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body);
-        return data.cast<Map<String, dynamic>>();
+        final body = json.decode(response.body);
+        if (body is Map && body['data'] != null) {
+          final List<dynamic> data = body['data'];
+          return data.cast<Map<String, dynamic>>();
+        }
+        if (body is List) {
+          return body.cast<Map<String, dynamic>>();
+        }
+        return [];
       }
       final error = json.decode(response.body);
       throw Exception(error['message'] ?? 'Failed to fetch offices');
@@ -56,17 +63,13 @@ defaultValue: 'http://localhost:8080/api',
   }
 
   Future<List<Map<String, dynamic>>> getTypes() async {
-    try {
-      final response = await http.get(Uri.parse('$baseUrl/feedback-types'), headers: {'Content-Type': 'application/json', 'Accept': 'application/json'});
-      if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body);
-        return data.cast<Map<String, dynamic>>();
-      }
-      throw Exception('Failed to fetch types: ${response.statusCode}');
-    } catch (e) {
-      print('❌ Get types error: $e');
-      rethrow;
-    }
+    // Local categories matching web frontend (no backend endpoint exists)
+    return [
+      {'id': 1, 'name': 'Service'},
+      {'id': 2, 'name': 'Staff'},
+      {'id': 3, 'name': 'Environment'},
+      {'id': 4, 'name': 'Others'},
+    ];
   }
 
   Future<List<Map<String, dynamic>>> getFeedback({String? jwtToken}) async {
@@ -110,7 +113,7 @@ defaultValue: 'http://localhost:8080/api',
 
   Future<Map<String, dynamic>> login({required String email, required String password}) async {
     try {
-      final response = await http.post(Uri.parse('$baseUrl/login'), headers: {'Content-Type': 'application/json', 'Accept': 'application/json'}, body: jsonEncode({'email': email, 'password': password}));
+      final response = await http.post(Uri.parse('$baseUrl/admin/login'), headers: {'Content-Type': 'application/json', 'Accept': 'application/json'}, body: jsonEncode({'email': email, 'password': password}));
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         final token = data['token'] ?? data['access_token'];
