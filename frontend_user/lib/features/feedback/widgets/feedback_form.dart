@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../../../core/services/api_service.dart';
+import 'dart:ui';
+import '../../services/feedback_service.dart';
 import '../widgets/recaptcha_widget.dart';
 
 class FeedbackForm extends StatefulWidget {
@@ -21,18 +22,36 @@ class _FeedbackFormState extends State<FeedbackForm> {
   String feedbackText = "";
   String? captchaToken;
 
-  final List<String> offices = [
-    "Registrar",
-    "Library",
-    "Dormitory",
-  ];
+  List<Map<String, dynamic>> _offices = [];
+  List<Map<String, dynamic>> _types = [];
+  bool _isLoading = false;
+  final FeedbackService _feedbackService = FeedbackService();
+  int? _selectedOfficeId;
+  int? _selectedTypeId;
 
-  final List<String> categories = [
-    "Service",
-    "Staff",
-    "Environment",
-    "Others",
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
+    try {
+      final offices = await _feedbackService.getOffices();
+      final types = await _feedbackService.getTypes();
+      if (mounted) {
+        setState(() {
+          _offices = offices;
+          _types = types;
+        });
+      }
+    } catch (e) {
+      // Handle error
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   final List<String> bannedWords = [
     // English
@@ -77,28 +96,25 @@ class _FeedbackFormState extends State<FeedbackForm> {
   }
 
   bool isGibberish(String text) {
-    final words = text.trim().split(RegExp(r'\s+'));
+    final words = text.trim().split(RegExp(r'\\s+'));
     if (words.isEmpty || words.first.isEmpty) return true;
 
     int gibberishCount = 0;
     final totalWords = words.length;
 
     for (final word in words) {
-      final clean = word.replaceAll(RegExp(r'[^\p{L}\p{N}]', unicode: true), '');
+      final clean = word.replaceAll(RegExp(r'[^\\p{L}\\p{N}]', unicode: true), '');
       if (clean.isEmpty) continue;
       final len = clean.length;
 
-      // No vowels and long
       if (len > 7 && !RegExp(r'[aeiouAEIOU]').hasMatch(clean)) {
         gibberishCount++;
         continue;
       }
-      // Extreme length without vowels
       if (len > 15 && !RegExp(r'[aeiouAEIOU]').hasMatch(clean)) {
         gibberishCount++;
         continue;
       }
-      // High repetition of single char
       if (len >= 5) {
         final lower = clean.toLowerCase();
         final charCounts = <String, int>{};
@@ -111,8 +127,7 @@ class _FeedbackFormState extends State<FeedbackForm> {
           continue;
         }
       }
-      // Long consonant cluster
-      if (len >= 10 && RegExp(r'[^aeiouAEIOU\s]{8,}').hasMatch(clean)) {
+      if (len >= 10 && RegExp(r'[^aeiouAEIOU\\s]{8,}').hasMatch(clean)) {
         gibberishCount++;
         continue;
       }
@@ -120,8 +135,7 @@ class _FeedbackFormState extends State<FeedbackForm> {
 
     if (totalWords > 0 && (gibberishCount / totalWords) > 0.3) return true;
 
-    // Overall letter ratio
-    final letters = text.replaceAll(RegExp(r'[^\p{L}]', unicode: true), '');
+    final letters = text.replaceAll(RegExp(r'[^\\p{L}]', unicode: true), '');
     final ratio = letters.length / text.length;
     if (ratio < 0.2) return true;
 
@@ -129,7 +143,7 @@ class _FeedbackFormState extends State<FeedbackForm> {
   }
 
   int wordCount(String text) {
-    return text.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length;
+    return text.trim().split(RegExp(r'\\s+')).where((w) => w.isNotEmpty).length;
   }
 
   Future<void> submit() async {
@@ -171,44 +185,20 @@ class _FeedbackFormState extends State<FeedbackForm> {
       return;
     }
 
-    try {
-      final response = await ApiService.post('/feedback', body: {
-        'message': trimmed,
-      });
+    setState(() {}); // loading indicator
 
-      if (response.statusCode == 200 || response.statusCode == 201) {
+    try {
+      final result = await _feedbackService.submitFeedback(message: trimmed);
+
+      if (result['success']) {
         if (mounted) {
-          showDialog(
-            context: context,
-            builder: (_) => AlertDialog(
-              title: const Text("Thank You"),
-              content: const Text(
-                "Your feedback has been submitted successfully.",
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    _formKey.currentState?.reset();
-                    setState(() {
-                      selectedOffice = null;
-                      selectedCategory = null;
-                      feedbackText = "";
-                      captchaToken = null;
-                    });
-                  },
-                  child: const Text("OK"),
-                ),
-              ],
-            ),
-          );
+          Navigator.pushNamed(context, '/thankyou');
         }
       } else {
-        final errorBody = response.body.isNotEmpty ? response.body : 'Server error';
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Submission failed: $errorBody'),
+              content: Text(result['message'] ?? 'Submission failed'),
               backgroundColor: const Color(0xFFB91C1C),
             ),
           );
@@ -235,11 +225,11 @@ class _FeedbackFormState extends State<FeedbackForm> {
           width: 500,
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
-            color: lnuWhite.withOpacity(0.92),
+            color: Colors.white,
             borderRadius: BorderRadius.circular(24),
             border: Border.all(
-              color: lnuGold.withOpacity(0.7),
-              width: 1.5,
+              color: lnuGold,
+              width: 2,
             ),
             boxShadow: [
               BoxShadow(
@@ -256,26 +246,30 @@ class _FeedbackFormState extends State<FeedbackForm> {
               children: [
                 Image.asset(
                   'assets/images/lnu_logo.png',
-                  height: 75,
+                  height: 60,
+                  errorBuilder: (context, error, stackTrace) => const Icon(
+                    Icons.feedback_outlined,
+                    size: 60,
+                    color: Colors.black,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 const Text(
-                  "Welcome to the LNU Feedback Portal",
+                  'Welcome to the LNU Feedback Portal',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
-                    color: lnuNavy,
+                    color: Colors.black87,
                   ),
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  "Your voice matters. Help us improve our services by sharing your experience.",
+                  'Your voice matters. Help us improve our services by sharing your experience.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.black54,
-                    height: 1.4,
+                    fontSize: 14,
+                    color: Colors.black87,
                   ),
                 ),
                 const SizedBox(height: 10),
@@ -294,10 +288,10 @@ class _FeedbackFormState extends State<FeedbackForm> {
                 DropdownButtonFormField<String>(
                   value: selectedOffice,
                   decoration: customInputDecoration("Select Office"),
-                  items: offices.map((office) {
+                  items: _offices.map((office) {
                     return DropdownMenuItem<String>(
-                      value: office,
-                      child: Text(office),
+                      value: office['id'].toString(),
+                      child: Text(office['name']),
                     );
                   }).toList(),
                   onChanged: (value) {
@@ -312,10 +306,10 @@ class _FeedbackFormState extends State<FeedbackForm> {
                 DropdownButtonFormField<String>(
                   value: selectedCategory,
                   decoration: customInputDecoration("Select Category"),
-                  items: categories.map((cat) {
+                  items: _types.map((type) {
                     return DropdownMenuItem<String>(
-                      value: cat,
-                      child: Text(cat),
+                      value: type['id'].toString(),
+                      child: Text(type['name']),
                     );
                   }).toList(),
                   onChanged: (value) {

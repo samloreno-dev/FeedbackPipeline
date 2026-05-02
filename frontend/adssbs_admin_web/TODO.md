@@ -1,2 +1,0 @@
-- [x] 1. Fix AppBar leading Row overflow: Move branding to title, add menu IconButton
-- [ ] 2. Fix NoSuchMethodError '<': Add safe numeric parsing for API data comparisons and sorting

@@ -13,14 +13,30 @@ class RecaptchaWidget extends StatefulWidget {
 }
 
 class _RecaptchaWidgetState extends State<RecaptchaWidget> {
+  bool _robotCheck = false;
   bool _verified = false;
+  String _token = '';
 
-  void _verify() {
-    const token = 'local-test-token';
+  void _onRobotCheck(bool value) {
+    setState(() {
+      _robotCheck = value;
+    });
+  }
+
+  Future<void> _verifyCaptcha() async {
+    if (!_robotCheck) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please confirm you are not a robot first')),
+      );
+      return;
+    }
+    // Simulate captcha verification
+    await Future.delayed(const Duration(seconds: 1));
     setState(() {
       _verified = true;
+      _token = 'recaptcha-token';
     });
-    widget.onVerified(token);
+    widget.onVerified(_token);
   }
 
   @override
@@ -54,7 +70,7 @@ class _RecaptchaWidgetState extends State<RecaptchaWidget> {
           SizedBox(
             height: 44,
             child: ElevatedButton.icon(
-              onPressed: _verified ? null : _verify,
+onPressed: _robotCheck ? _verifyCaptcha : null,
               icon: Icon(_verified ? Icons.verified : Icons.verified_user),
               label: Text(_verified ? 'Verified' : 'Verify CAPTCHA'),
             ),
